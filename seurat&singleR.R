@@ -20,102 +20,11 @@ library(ggalluvial)
 library(ggsci)
 library(plyr)
 library(dplyr)
-#Create Seurat Object-----------------------------------------------------------
-PAH1.data <- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/P/PBMC01_filtered_matrix")
-PAH1 <- CreateSeuratObject(counts = PAH1.data, project = "P1", min.cells = 3, min.features = 200)
-
-PAH2.data <- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/P/PBMC07_filtered_matrix")
-PAH2 <- CreateSeuratObject(counts = PAH2.data, project = "P2", min.cells = 3, min.features = 200)
-
-PAH3.data <- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/P/PBMC18_filtered_matrix")
-PAH3 <- CreateSeuratObject(counts = PAH3.data, project = "P3", min.cells = 3, min.features = 200)
-
-PAH4.data<- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/P/EX14PBMC_filtered_matrix")
-PAH4 <- CreateSeuratObject(counts = PAH4.data, project = "P4", min.cells = 3, min.features = 200)
-
-PAH5.data<- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/P/EX16PBMC_filtered_matrix")
-PAH5 <- CreateSeuratObject(counts = PAH5.data, project = "P5", min.cells = 3, min.features = 200)
-
-PAH6.data<- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/P/EX28PBMC_filtered_matrix")
-PAH6 <- CreateSeuratObject(counts = PAH6.data, project = "P6", min.cells = 3, min.features = 200)
-
-
-CON1.data <- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/control_P/Y1_filtered_matrix")
-CON1 <- CreateSeuratObject(counts = CON1.data, project = "C1", min.cells = 3, min.features = 200)
-
-CON2.data <- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/control_B/Y2_filtered_matrix")
-CON2 <- CreateSeuratObject(counts = CON2.data, project = "C2", min.cells = 3, min.features = 200)
-
-CON3.data <- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/control_B/Y3_filtered_matrix")
-CON3 <- CreateSeuratObject(counts = CON3.data, project = "C3", min.cells = 3, min.features = 200)
-
-
-CON4.data <- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/control_P/Y4_filtered_matrix")
-CON4 <- CreateSeuratObject(counts = CON4.data, project = "C4", min.cells = 3, min.features = 200)
-
-CON5.data <- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/control_P/Y5_filtered_matrix")
-CON5 <- CreateSeuratObject(counts = CON5.data, project = "C5", min.cells = 3, min.features = 200)
-
-CON6.data <- Read10X(data.dir = "/mnt/data/userdata/svip017/biny/data/raw/control_P/Y6_filtered_matrix")
-CON6 <- CreateSeuratObject(counts = CON6.data, project = "C6", min.cells = 3, min.features = 200)
-
-
-PAH1@meta.data$group <- "PAHs"
-PAH2@meta.data$group <- "PAHs"
-PAH3@meta.data$group <- "PAHs"
-PAH4@meta.data$group <- "PAHs"
-PAH5@meta.data$group <- "PAHs"
-PAH6@meta.data$group <- "PAHs"
-CON1@meta.data$group <- "Control"
-CON2@meta.data$group <- "Control"
-CON3@meta.data$group <- "Control"
-CON4@meta.data$group <- "Control"
-CON5@meta.data$group <- "Control"
-CON6@meta.data$group <- "Control"
-  
-PAH1[["percent.mt"]] <- PercentageFeatureSet(PAH1, pattern = "^MT-")
-PAH2[["percent.mt"]] <- PercentageFeatureSet(PAH2, pattern = "^MT-")
-PAH3[["percent.mt"]] <- PercentageFeatureSet(PAH3, pattern = "^MT-")
-PAH4[["percent.mt"]] <- PercentageFeatureSet(PAH4, pattern = "^MT-")
-PAH5[["percent.mt"]] <- PercentageFeatureSet(PAH5, pattern = "^MT-")
-PAH6[["percent.mt"]] <- PercentageFeatureSet(PAH6, pattern = "^MT-")
-
-CON1[["percent.mt"]] <- PercentageFeatureSet(CON1, pattern = "^MT-")
-CON2[["percent.mt"]] <- PercentageFeatureSet(CON2, pattern = "^MT-")
-CON3[["percent.mt"]] <- PercentageFeatureSet(CON3, pattern = "^MT-")
-CON4[["percent.mt"]] <- PercentageFeatureSet(CON4, pattern = "^MT-")
-CON5[["percent.mt"]] <- PercentageFeatureSet(CON5, pattern = "^MT-")
-CON6[["percent.mt"]] <- PercentageFeatureSet(CON6, pattern = "^MT-")
-
-
-PAH1 <- subset(PAH1, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-PAH2 <- subset(PAH2, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-PAH3 <- subset(PAH3, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-PAH4 <- subset(PAH4, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-PAH5 <- subset(PAH5, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-PAH6 <- subset(PAH6, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-
-
-CON1 <- subset(CON1, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-CON2 <- subset(CON2, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-CON3 <- subset(CON3, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-CON4 <- subset(CON4, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-CON5 <- subset(CON5, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-CON6 <- subset(CON6, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
-
-scRNA <- merge(x=PAH1,y =list(PAH2,PAH3,PAH4,PAH5,PAH6,CON1,CON2,CON3,CON4,CON5,CON6))
-saveRDS(scRNA, file ='scRNA12.rds')
-dim(scRNA)
-head(scRNA@meta.data)
-# scRNA[["percent.mt"]] <- PercentageFeatureSet(scRNA, pattern = "^MT-")
-view(scRNA@meta.data)
 
 #Load data--------------------------------------------------------------------
 scRNA<- readRDS(file = "/Volumes/YMQ/mac/scRNA12R.rds")
 view(scRNA@meta.data)
-dim(scRNA12R)
-#B_scRNA12R<- readRDS("scRNA_Bcell.rds")
-#dim(B_scRNA12R)
+dim(scRNA)
 
 #Cell filter------------------------------------------------------------------
 #scRNA <- subset(scRNA, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
@@ -127,7 +36,8 @@ head(scRNA@meta.data)
 scRNA
 
 
-#counts <- GetAssayData(scRNA, assay = "RNA")
+#Remove mitochondrial and ribosomal genes
+counts <- GetAssayData(scRNA, assay = "RNA")
 mt.genes <- rownames(scRNA)[grep("^MT-",rownames(scRNA))]
 rb.genes <- rownames(scRNA)[grep("^RPL|^RPS|^MRPL|^MRPS",rownames(scRNA))]
 dim(scRNA)
