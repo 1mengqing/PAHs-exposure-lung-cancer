@@ -178,10 +178,6 @@ for (l in subc){
 dev.off()
 head(scRNA)
 
-#top10 differential genes
-top10 <- cluster.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
-
-DoHeatmap(pb, features = top20$gene) + NoLegend()#展示前10个标记基因的热图
 saveRDS(scRNA, file = "scRNA_harmony.rds")
 
 # devtools::install_github("eddelbuettel/harmony",force = TRUE)
