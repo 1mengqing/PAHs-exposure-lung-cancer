@@ -32,12 +32,12 @@ This comprehensive methodology aimed to uncover alterations in gene expression a
 
 ### Peripheral blood PBMC single-cell sequencing from mice
 
-Establish a mouse lung cancer model induced by benzopyrene,divided into two stages 
+Establish a mouse lung cancer model induced by benzopyrene, divided into two stages 
 
 one case of PBMC in each of the control group and the exposure group
 
 
-### lung single-cell sequencing from mice
+### Lung single-cell sequencing from mice
 
 one case in each of the control group and the exposure group
 
