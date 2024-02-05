@@ -1,5 +1,6 @@
 # PAHs-exposure-lung-cancer
-Analyze changes in the immune microenvironment in people long-term exposed to PAHs through single-cell transcriptome sequencing to reveal potential phenotypic characteristics of immune cells in the process of PAH-induced lung cancer.
+Heterogeneity of immune cells in PAHs exposure and lung cancer progression: a single-cell sequencing study 
+
 
 
 ## Background
