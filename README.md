@@ -40,3 +40,26 @@ one case of PBMC in each of the control group and the exposure group
 ### lung single-cell sequencing from mice
 
 one case in each of the control group and the exposure group
+
+## Project organization
+
+Scripts: Codes used to develop the project's methods.
+Figures: Images results from analysis 
+
+## Methodology
+Some of the methods used:
+Analyze and visualize single-cell whole-transcriptome gene expression
+Differential gene expression analysis
+Gene Ontology enrichment analysis
+Cell fate trajectory analysis
+Regulatory network analysis
+Cell-cell interaction analysis
+
+## Contributing
+
+If you are interested in contributing to this project, don't hesitate to get in touch with the project leader for more information (vera.pancaldi@inserm.fr)
+
+## Authors
+
+Mengqing Yan（https://github.com/1mengqing）
+Vera Pancaldi (https://github.com/VeraPancaldi)
