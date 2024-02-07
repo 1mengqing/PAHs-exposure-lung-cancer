@@ -19,6 +19,7 @@ This study aims to investigate the impact of PAH exposure on the peripheral bloo
 This comprehensive methodology aimed to uncover alterations in gene expression at the single-cell level, providing valuable insights into the impact of PAH exposure on the human peripheral blood immune cell transcriptome. The bioinformatics analyses aimed to identify potential biomarkers and unravel the molecular mechanisms underlying the association between PAH exposure and early stages of lung carcinogenesis.
 
 <img width="882" alt="image" src="https://github.com/1mengqing/PAHs-exposure-lung-cancer/assets/158156342/f5a08175-ebf8-40c4-9812-3d235a5ec049">
+<img width="613" alt="image" src="https://github.com/1mengqing/PAHs-exposure-lung-cancer/assets/158156342/a792ad83-4a18-4e59-aebc-0255dfcf68c7">
 
 ## Data
 
