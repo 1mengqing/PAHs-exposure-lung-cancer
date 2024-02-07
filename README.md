@@ -44,7 +44,7 @@ one case in each of the control group and the exposure group
 
 ## Project organization
 
-Scripts: Codes used to develop the project's methods.
+Scripts:Codes used to develop the project's methods.
 Figures: Images results from analysis 
 
 ## Methodology
