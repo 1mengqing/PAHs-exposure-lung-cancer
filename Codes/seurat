@@ -1,0 +1,101 @@
+rm(list = ls())
+setwd("/home/mengqing.yan/PAH/12scRNAseq/code/")
+getwd()
+#load package----------------------------------------------------------------
+library(Seurat)
+library(tidyverse)
+library(patchwork)
+library(SingleR)
+library(tidyverse)
+library(reshape2)
+library(patchwork)
+library(celldex)
+library(BiocParallel)
+library(cowplot)
+library(RColorBrewer)
+library(ggplot2)
+library(ggalluvial)
+library(ggsci)
+library(plyr)
+library(dplyr)
+
+#Load data--------------------------------------------------------------------
+scRNA<- readRDS(file = "/home/mengqing.yan/PAH/12scRNAseq/26457-118910/data/scRNA12.rds")
+view(scRNA@meta.data)
+dim(scRNA)
+#26457 118910
+#QC and selecting cells for further analysis----------------------------------
+Idents(scRNA) <- "scRNA"
+pdf("1.1.QC-Vlnplot.pdf",width = 10,height = 6)
+VlnPlot(object = scRNA, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3,raster = FALSE)
+dev.off()
+Idents(scRNA) <- "orig.ident"
+pdf("1.2.QC-Vlnplot.pdf",width = 10,height = 6)
+VlnPlot(object = scRNA, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3,raster = FALSE)
+dev.off()
+
+#Sequencing depth
+plot1 <- FeatureScatter(object = scRNA, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(object = scRNA, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+pdf("2.0 featureCor.pdf",width = 10,height = 6)
+plot1+plot2
+dev.off()
+#gene expression
+pdf(file=" 3.0 colSums.pdf",width=10,height=6)
+hist(colSums(scRNA$RNA@data),
+     breaks = 100,
+     main = "Total expression before normalisation",
+     xlab = "Sum of expression")
+dev.off()
+
+#Cell filter
+  #scRNA <- subset(scRNA, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
+  scRNA <- subset(scRNA, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 15)
+dim(scRNA)
+#26457 117757
+
+#Remove mitochondrial and ribosomal genes
+#counts <- GetAssayData(scRNA, assay = "RNA")
+#mt.genes <- rownames(scRNA)[grep("^MT-",rownames(scRNA))]
+#rb.genes <- rownames(scRNA)[grep("^RPL|^RPS|^MRPL|^MRPS",rownames(scRNA))]
+#dim(scRNA)
+#view(scRNA@meta.data)
+#counts <- counts[-(which(rownames(counts) %in% c(mt.genes,rb.genes))),]
+#scRNA <- subset(scRNA, features = rownames(counts))
+#dim(scRNA)
+
+#Normalizing the data----------------------------------------------------------
+
+scRNA <- NormalizeData(object = scRNA, normalization.method = "LogNormalize", scale.factor = 10000)
+
+#Average gene expression after normalization
+pdf(file=" 3.1 colSums.pdf",width=10,height=6)
+hist(colSums(scRNA$RNA@data),
+     breaks = 100,
+     main = "Total expression before normalisation",
+     xlab = "Sum of expression")
+dev.off()
+#Identification of highly variable features (feature selection)-----------------------------------------------
+
+scRNA <- FindVariableFeatures(object = scRNA,selection.method = "vst", nfeatures = 2000)
+
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(object = scRNA), 10)
+pdf(file=" 4.0.featureVar.pdf",width=10,height=6)
+plot1 <- VariableFeaturePlot(object = scRNA)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+
+CombinePlots(plots = list(plot1, plot2))
+dev.off()
+
+pdf("4.1.LabelPoints.pdf",width = 10,height = 6)
+plot2
+dev.off()
+
+#Scaling the data------------------------------------------------------------
+all.gene <- rownames(scRNA)
+scRNA <- ScaleData(scRNA,features = all.gene)
+
+
+#Perform linear dimensional reduction-------------------------------------------------
+scRNA <- RunPCA(scRNA, features = VariableFeatures(object = scRNA))
