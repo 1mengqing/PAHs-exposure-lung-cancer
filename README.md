@@ -45,7 +45,8 @@ one case in each of the control group and the exposure group
 ## Project organization
 
 Scripts:Codes used to develop the project's methods.
-Figures: Images results from analysis 
+Figures: Images results from analysis
+Output: Results of the project
 
 ## Methodology
 Some of the methods used:
