@@ -99,3 +99,88 @@ scRNA <- ScaleData(scRNA,features = all.gene)
 
 #Perform linear dimensional reduction-------------------------------------------------
 scRNA <- RunPCA(scRNA, features = VariableFeatures(object = scRNA))
+# Examine and visualize PCA results a few different ways
+print(scRNA[["pca"]], dims = 1:5, nfeatures = 5)
+#PC_ 1 
+#Positive:  MT-CO1, RPL13, RPL5, RPS12, RPL23AP42 
+#Negative:  S100A8, S100A9, CXCL8, FOS, CTSS 
+#PC_ 2 
+#Positive:  CCL5, IL32, NKG7, TRBC2, GZMA 
+#Negative:  TGFBI, VCAN, CST3, FCN1, CPVL 
+#PC_ 3 
+#Positive:  TMSB4XP8, RPS13P2, AC016739.1, AP001324.1, RPS27AP16 
+#Negative:  AC099560.1, PLEKHA7, AMBRA1, OOEP, MAMDC2 
+#PC_ 4 
+#Positive:  MS4A1, CD79A, IGHM, IGHD, BANK1 
+#Negative:  NKG7, GNLY, CCL5, CST7, GZMB 
+#PC_ 5 
+#Positive:  PF4, PPBP, TUBB1, CAVIN2, GNG11 
+#Negative:  CTSS, LYZ, FCN1, AIF1, S100A8 
+pdf(file=" 5.1.pcaGene.pdf",width=20,height=20)
+VizDimLoadings(object = scRNA, dims = 1:20, reduction = "pca")
+dev.off()
+pdf(file=" 5.2.pcaGene.pdf",width=20,height=20)
+DimPlot(scRNA, reduction = "pca",raster=FALSE) + NoLegend()
+dev.off()
+pdf(file=" 5.3.pcaGene.pdf",width=20,height=20)
+DimHeatmap(scRNA, dims = 1:15, cells = 500, balanced = TRUE)
+dev.off()
+pdf(file=" 5.4.pcaGene.pdf",width=20,height=20)
+ElbowPlot(scRNA)
+dev.off()
+scRNA <- JackStraw(scRNA, num.replicate = 100)
+scRNA <- ScoreJackStraw(scRNA,dims = 1:20)
+pdf(file=" 5.5.pca.pdf",width=10,height=8)
+JackStrawPlot(scRNA, dims = 1:20)
+dev.off()
+
+#Remove batch effect-----------------------------------------------------------
+system.time({scRNA <- RunHarmony(scRNA, group.by.vars = "orig.ident")})
+names(scRNA@reductions)
+
+#Cluster the cells-------------------------------------------------
+scRNA <- FindNeighbors(scRNA, dims = 1:20,reduction = "harmony")
+scRNA <- FindClusters(scRNA, resolution = 0.5) #0.4-1.2
+
+#Run non-linear dimensional reduction (UMAP/tSNE)------------------
+scRNA <- RunUMAP(scRNA,dims = 1:20,reduction = "harmony")
+scRNA <- RunTSNE(scRNA,dims = 1:20,reduction = "harmony")
+
+pdf("6.0.seurat_clusters_umap.pdf",width = 10,height = 8)
+DimPlot(scRNA, reduction = "umap",raster=FALSE)
+dev.off()
+
+pdf("6.1.seurat_clusters_tsne.pdf",width = 10,height = 8)
+DimPlot(scRNA, reduction = "tsne",raster=FALSE)
+dev.off()
+
+#group
+pdf("6.2.umap_group.pdf",width = 8,height = 6)
+DimPlot(scRNA, reduction = "umap", group.by = 'group',raster=FALSE)
+dev.off()
+
+pdf("6.3.tsne_group.pdf",width = 8,height = 6)
+DimPlot(scRNA, reduction = "tsne", group.by = 'group',raster=FALSE)
+dev.off()
+saveRDS(scRNA, file = "scRNA_UMAP.rds")
+view(scRNA)
+#Finding differentially expressed features (cluster biomarkers)---------
+subc<-levels(x= scRNA@active.ident)
+for (l in subc){
+  cluster.markers <- FindMarkers(object= scRNA, ident.1=l, min.pct=0.25,logfc.threshold = 0.25)
+  write.table(cluster.markers,file=paste(l,'_diffgenes.xls',sep=''),sep='\t',quote=F,row.names=T)}
+dev.off()
+
+cluster.markers <- FindAllMarkers(object = scRNA, only.pos = TRUE, 
+                              min.pct = 0.25, 
+                              thresh.use = 0.25)
+
+
+top10 <- cluster.markers %>% group_by(cluster) %>% top_n(10, avg_log2FC)
+top5 <- cluster.markers %>% group_by(cluster) %>% top_n(5, avg_log2FC)
+
+pdf(file=" 6.4.DG5.pdf",width=26,height=16)
+DoHeatmap(scRNA,top5$gene)
+dev.off()
+
+
