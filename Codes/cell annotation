@@ -1,0 +1,44 @@
+#cell annotation------------------------------------------------------------
+#singleR
+#load package
+library(Seurat)
+library(tidyverse)
+library(SingleR)
+library(celldex)
+#database
+#Mouse.se=MouseRNAseqData()##mouse
+hpca.se=HumanPrimaryCellAtlasData() ##human
+Blue.se=BlueprintEncodeData()##human
+Immune.se=DatabaseImmuneCellExpressionData()##human
+Nover.se=NovershternHematopoieticData()##human
+MonacoIm.se=MonacoImmuneData()##human
+#ImmGen.se=ImmGenData() #(mouse)
+
+saveRDS(hpca.se,'hpca.se.rds')
+saveRDS(Blue.se,'Blue.se.rds')
+saveRDS(Immune.se,'Immune.se.rds')
+saveRDS(Nover.se,'Nover.se.rds')
+saveRDS(MonacoIm.se,'MonacoIm.se.rds')
+
+#load data
+scRNA<- readRDS("scRNA_harmony.rds")
+data <- GetAssayData(scRNA, slot="data") ##Get normalized matrix
+#annotate by cluster :resolution=0.5:RNA_snn_res.0.5
+Idents(scRNA) <- 'RNA_snn_res.0.5'
+pred.cluster <- SingleR(test = data, ref = list(Bu=Blue.se, hp=hpca.se, Mo=MonacoIm.se), clusters=Idents(scRNA), labels = list(Blue.se$label.main,hpca.se$label.main,MonacoIm.se$label.main)) #按照细胞群进行注释
+#pred.cluster <- SingleR(test = data, ref = list(HPCA=hpca.se), clusters=Idents(scRNA),labels = list(hpca.se$label.main)) 
+celltype <-data.frame(ClusterID=rownames(pred.cluster),celltype_SR=pred.cluster$labels,stringsAsFactors = F)
+head(celltype)
+celltype
+scRNA[['celltype_R']]<- celltype$celltype_SR[match(Idents(scRNA), celltype$ClusterID)]
+head(scRNA@meta.data)
+#plot
+
+pdf(file="7.1.umap.pdf",width=18,height = 12)
+DimPlot(scRNA,reduction = "umap",raster=FALSE,label=TRUE) 
+dev.off()
+pdf(file="7.2.tsne.pdf",width=12,height = 6)
+DimPlot(scRNA,reduction = "tsne",raster=FALSE,label=TRUE) 
+dev.off()
+
+saveRDS(scRNA,"singleR.rds")
