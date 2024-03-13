@@ -1,5 +1,8 @@
+rm(list = ls())
 
-#Load package
+setwd("/Users/mq/Downloads/Mice:Blood/Monocytes")
+
+
 library(Seurat)
 library(dplyr)
 library(stringr)
@@ -13,203 +16,168 @@ library(GSVA) #GSVS
 library(DOSE)
 library(topGO)
 #library(pathview) 
-library(msigdbr) #
+library(msigdbr) #数据库
 library(pheatmap)
 library(Rgraphviz)
-#Load data
-scRNA <- readRDS("~/biny/ymq/12sample/2024/117757/scRNA_T-cells.rds")
+library(ggplot2)
 
-head(scRNA@meta.data)
-# names(pbmc@meta.data)[4] <- "celltype"
-Idents(scRNA) <- "group"
-#Obtain differential genes between groups
-cells1 <- subset(scRNA@meta.data, group %in% c("PAHs"))  %>% rownames()
-cells2 <- subset(scRNA@meta.data, group %in%  c("Control"))  %>% rownames()
-deg <- FindMarkers(scRNA, ident.1 = cells1, ident.2 = cells2)
-deg <- data.frame(gene = rownames(deg), deg)
+
+
+
+data <- readRDS("/Users/mq/Downloads/Mice:Blood/mergedata.rds")
+dim(data)
+head(data)
+Mo <- subset(data, subset = Celltype == "Monocytes")
+#Ncells <- subset(pro1,  subset = Celltype =="Neutrophils")
+#Tcells <- subset(pro1,  subset = Celltype =="T cells")
+#dim(Tcells)
+saveRDS(Mo,"Monocytes.rds")
+pro1 <- Mo
+dim(pro1)
+# group --------------------------------------------------------------------
+cells1 <- subset(pro1@meta.data, group %in% c("Bap"))  %>% rownames()
+cells2 <- subset(pro1@meta.data, group %in% c("Control"))  %>% rownames()
+deg <- FindMarkers(pro1, ident.1 = cells1, ident.2 = cells2)
+deg <- data.frame(gene = rownames(deg), deg)#
+
 head(deg)
+dim(deg)
+#Distinguish between up- and down-regulated genes
+colnames(deg)
+k1 = (deg$p_val_adj < 0.05)&(deg$avg_log2FC < -0.5) 
+k2 = (deg$p_val_adj < 0.05)&(deg$avg_log2FC > 0.5) 
+table(k1)
+table(k2)
 
-write.table(deg, file="deg.txt", sep="\t", quote=F, row.names = F)
-deg <- read.table("deg.txt", header=T, sep="\t", check.names=F)     #读
+change = ifelse(k1,"down",ifelse(k2,"up","stable"))
+deg$change <- change
+head(deg)
+table(deg$change)
 
-#筛选基因
-deg1 <- deg
-
-deg1$change=ifelse(deg1$p_val_adj>0.05,"stable",
-                   ifelse(deg1$avg_log2FC>0.5 ,"up",
-                          ifelse(deg1$avg_log2FC<(-0.5),"down","stable")))
-table(deg1$change)
-
-
-
-write.table(deg1, file="deg1.txt", sep="\t", quote=F, row.names = F)
-
-
-
-#gene_symbol is converted to ENTREZID
-#keytypes(org.Hs.eg.db) 
-s2e <- bitr(deg1$gene, 
+#change name to gene id
+s2e <- bitr(deg$gene, 
             fromType = "SYMBOL",
             toType = "ENTREZID",
-            OrgDb = org.Hs.eg.db)
+            OrgDb = org.Mm.eg.db)#
+
 head(s2e)
+deg <- inner_join(deg,s2e,by=c("gene"="SYMBOL")) #
+head(deg)
 
-deg1 <- inner_join(deg1,s2e,by=c("gene"="SYMBOL")) 
-head(deg1)
+#select gene 
 
-#GO enrichment[Symbol]
-gene_up = deg1[deg1$change == 'up','gene'] #
-gene_down = deg1[deg1$change == 'down','gene'] 
-gene_diff  = c(gene_up,gene_down)
+gene_up = deg[deg$change == 'up','gene'] #
+gene_down = deg[deg$change == 'down','gene'] #
+gene_diff = c(gene_up,gene_down)
 
-#KEGG enrichment[ENTREZID]
+pvalueFilter=0.05       
+qvalueFilter=0.05       
 
-gene_all = deg1[,'ENTREZID']
-gene_up_KEGG = deg1[deg1$change == 'up','ENTREZID']
-gene_down_KEGG = deg1[deg1$change == 'down','ENTREZID']
-gene_diff_KEGG = c(gene_up_KEGG,gene_down_KEGG)
-
-#GO enrichment 
-#CC
-ego_CC <- enrichGO(gene          = gene_down,
-                   keyType       = 'SYMBOL', 
-                   OrgDb         = org.Hs.eg.db,  #database
-                   ont           = "CC",
-                   pAdjustMethod = "BH", #
-                   pvalueCutoff  = 0.05, #
-                   qvalueCutoff  = 1) #
-
-#BP
-ego_BP <- enrichGO(gene          = gene_down,
-                   OrgDb          = org.Hs.eg.db,
-                   #universe = 
-                   keyType       = 'SYMBOL',
-                   ont           = "BP",
-                   pAdjustMethod = "BH",
-                   pvalueCutoff  = 0.05,
-                   qvalueCutoff  = 1)
-
-#分子功能
-ego_MF <- enrichGO(gene          = gene_down,
-                   OrgDb         = org.Hs.eg.db,
-                   keyType       = 'SYMBOL',
-                   ont           = "MF",
-                   pAdjustMethod = "BH",
-                   pvalueCutoff  = 0.05,
-                   qvalueCutoff  = 1)
-
-save(ego_CC,ego_BP,ego_MF,file = "GO_down.Rdata")
+#color
+colorSel="qvalue"
+if(qvalueFilter>0.05){
+  colorSel="pvalue"
+}
 
 
-pdf(file = "GO_BP_plotGO.pdf",width = 12,height = 10)
-plotGOgraph(ego_BP) #topGO包
-dev.off()
 
-pdf(file = "GO_BP_goplot.pdf",width = 12,height = 10)
-goplot(ego_BP)
-dev.off()
+go_up<- enrichGO(gene = gene_up, OrgDb="org.Mm.eg.db", keyType  = 'SYMBOL',ont="all")
+go_down <- enrichGO(gene = gene_down, OrgDb="org.Mm.eg.db", keyType  = 'SYMBOL',ont="all")
 
+write.table(go_up, file="go_up_N.csv", sep="\t", quote=F, row.names = F)
+write.table(go_down, file="go_down_N.csv", sep="\t", quote=F, row.names = F)
 
-#细胞组分、分子功能、生物学过程
-go_up<- enrichGO(gene = gene_up, OrgDb = "org.Hs.eg.db", keyType  = 'SYMBOL',ont="all")
-
-go_down<- enrichGO(gene = gene_down, OrgDb = "org.Hs.eg.db", keyType  = 'SYMBOL',ont="all")
-
-
+dim(go_up)
+dim(go_down)
 #plot
-dotplot(ego_CC, showCategory=30)
-barplot(ego_CC) #top8
-pdf(file = "1.2GO-up.pdf",width = 12,height = 10)
+
+pdf(file = "1GO-up.pdf",width = 12,height = 10)
 p <- dotplot(go_up, split="ONTOLOGY",label_format = 70) +facet_grid(ONTOLOGY~., scale="free")
 p
 dev.off()
-pdf(file = "1.3GO-down.pdf",width = 12,height = 10)
+pdf(file = "2GO-down.pdf",width = 12,height = 10)
 p <- dotplot(go_down, split="ONTOLOGY",label_format = 70) +facet_grid(ONTOLOGY~., scale="free")
 p
 dev.off()
 
-p=dotplot(go,x="count", showCategory = 14,color="pvalue") #
-p
 
-#4 KEGG enrichment
+#KEGG enrichment
+#KEGG
 
-#Enrichment of up-regulated genes
-kk.up <- enrichKEGG(gene         = gene_up_KEGG, #注意这里只能用 entrzeid
-                    organism     = 'hsa',
-                    #universe     = gene_all, ##背景基因集，可省
-                    pvalueCutoff = 0.05, ##指定 p 值阈值，不显著的值将不显示在结果中
-                    qvalueCutoff = 1)
-#Enrichment of down-regulated genes
-kk.down <- enrichKEGG(gene         =  gene_down_KEGG,
-                      organism     = 'hsa',
-                      # universe     = gene_all,
-                      pvalueCutoff = 0.05,
-                      qvalueCutoff =1)
-kk.diff <- enrichKEGG(gene         = gene_diff_KEGG,
-                      organism     = 'hsa',
-                      pvalueCutoff = 0.05)
-save(kk.diff,kk.down,kk.up,file = "kegg.Rdata")
+gene_all = deg[,'ENTREZID']
+gene_up_KEGG = deg[deg$change == 'up','ENTREZID']
+gene_down_KEGG = deg[deg$change == 'down','ENTREZID']
+gene_diff_KEGG = c(gene_up_KEGG,gene_down_KEGG)
 
-ekegg1 <- setReadable(kk.up, OrgDb = org.Hs.eg.db, keyType="ENTREZID") #将基因的entrzeid转换成SYMBOL
-head(ekegg1)
-ekegg2 <- setReadable(kk.down, OrgDb = org.Hs.eg.db, keyType="ENTREZID") #将基因的entrzeid转换成SYMBOL
-head(ekegg2)
-#plot
-p1 <- barplot(ekegg1, showCategory=10,label_format = 70)
-p2 <- barplot(ekegg2, showCategory=10,label_format = 70)
-p1
-p2
-ggsave(p1, file='plotc1.pdf',width = 12,height = 10)
-ggsave(p2, file='plotc2.pdf',width = 12,height = 10)
+#remove.packages('clusterProfiler')
+#devtools::install_github("YuLab-SMU/clusterProfiler")
+#install.packages("clusterProfiler", dependencies = TRUE)
+#library(clusterProfiler)
 
-
-#3 GSEA
-#3.1 GSEA富集-使用clusterProfiler
-deg1
-geneList = deg1$avg_log2FC 
-names(geneList) = deg1$ENTREZID
-deg1$ENTREZID
-geneList = sort(geneList,decreasing = T)
-geneList[1:10]
-geneList
-
-## gsea-KEGG
-kk_gse <- gseKEGG(
-  geneList = geneList,
-  organism = "hsa",
-  keyType = 'kegg',
-  minGSSize = 3,
-  pvalueCutoff = 0.05,
-  verbose = FALSE  
+kk.up <- enrichKEGG(
+  gene = gene_up_KEGG, 
+  keyType = 'kegg',  
+  organism = 'mmu',  
+  pAdjustMethod = 'BH', 
+  universe= gene_all,
+  #pvalueCutoff = 1,  
+  qvalueCutoff = 0.25,  
 )
 
-kk_gse=DOSE::setReadable(kk_gse, OrgDb='org.Hs.eg.db',keyType='ENTREZID')  #基因ID转换
-sortkk<-kk_gse[order(kk_gse$enrichmentScore, decreasing = T),] #排序
-head(sortkk)
-#plot
-pdf(file = "gseapot.pdf",width = 12,height = 10)
-gseaplot2(kk_gse, 
-          "hsa03010", 
-          color = "firebrick")
-dev.off()
-#the top4 pathway
-pdf(file = "gseapot2.pdf",width = 12,height = 10)
-gseaplot2(kk_gse, row.names(sortkk)[1:4]) 
+kk.down <- enrichKEGG(
+  gene = gene_down_KEGG,        
+  keyType = 'kegg',           
+  organism = 'mmu',           
+  pAdjustMethod = 'BH',       
+  universe     = gene_all,
+  pvalueCutoff = 1,         
+  qvalueCutoff = 0.25,      
+)
+
+dim(kk.up)
+dim(kk.down)
+
+ekegg_up <- setReadable(kk.up, OrgDb = org.Mm.eg.db, keyType="ENTREZID") #
+ekegg_down <- setReadable(kk.down, OrgDb = org.Mm.eg.db, keyType="ENTREZID")
+#
+
+KEGG_up=as.data.frame(ekegg_up)
+KEGG_down=as.data.frame(ekegg_down)
+
+write.table(KEGG_up, file="KEGG_up_B1C.N.csv", sep="\t", quote=F, row.names = F)
+write.table(KEGG_down, file="KEGG_down_N.csv", sep="\t", quote=F, row.names = F)
+# showNum=15
+# if(nrow(KEGG)<showNum){
+#   showNum=nrow(KEGG)
+# }
+
+#柱状图
+pdf(file="3barplot_up.pdf", width=8, height=12)
+barplot(kk.up, drop=TRUE, showCategory=20)
 dev.off()
 
-#5.2 GSEA-GSEAbase
-#database
-genesets <- msigdbr(species = "Homo sapiens", category = "C3") %>% dplyr::select("gs_name","gene_symbol" )%>% as.data.frame()
-#https://www.gsea-msigdb.org/gsea/msigdb 不同数据集包含的内容，在这里我们选择c2数据集：（专家）校验基因集合，基于通路、文献等：
-#可以使用msigdbr_species() 和 msigdbr_collections()查看支持的物种和基因集类别。
-msigdbr_species()
-#plot
-names(geneList) = deg1$gene
-egmt <- GSEA(geneList, TERM2GENE=genesets,verbose=F,pvalueCutoff = 0.05)
-y=data.frame(egmt) 
+pdf(file="4barplot_down.pdf", width=8, height=12)
+barplot(kk.down, drop=TRUE, showCategory=20)
+dev.off()
+
+
+#GSEA
+
+geneList = deg$avg_log2FC
+names(geneList) = deg$ENTREZID
+geneList = sort(geneList,decreasing = T)
+#genesets <- msigdbr(species = "Homo sapiens", category = "H") %>% dplyr::select("gs_name","gene_symbol" )%>% as.data.frame()
+genesets <- msigdbr(species = "Mus musculus", category = "H") %>% dplyr::select("gs_name","gene_symbol" )%>% as.data.frame()
+#msigdbr_species()
+
+names(geneList) = deg$gene
+egmt <- GSEA(geneList, TERM2GENE=genesets,verbose=F,pvalueCutoff = 0.05) #
+y=data.frame(egmt) #
 head(y)
-#gseaplot
-pdf(file = "gseapot_C3.pdf",width = 12,height = 10)
-gseaplot2(egmt, geneSetID = 1, title = egmt$Description[1])
-dev.off()
+y
+saveRDS(egmt,"egmt.rds")
 
+pdf(file = "gseapot_H.pdf",width = 12,height = 10)
+gseaplot2(egmt, geneSetID = c(1,2,3,4,5))
+gseaplot2
+dev.off()
