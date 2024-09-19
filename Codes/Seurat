@@ -1,0 +1,97 @@
+# Load necessary packages
+library(Seurat)     # For single-cell RNA-seq analysis
+library(tidyverse)  # For data manipulation and visualization
+library(SingleR)    # For automated cell type annotation
+library(celldex)    # Provides reference datasets for SingleR
+
+# Function to create and preprocess Seurat object
+# @param data_dir Directory containing the data
+# @param project_name Project name for the Seurat object
+# @param group_name Group name for the metadata
+# @return A preprocessed Seurat object
+create_preprocess_seurat <- function(data_dir, project_name, group_name) {
+  data <- Read10X(data.dir = data_dir)  # Load data from 10X Genomics
+  seurat_obj <- CreateSeuratObject(counts = data, project = project_name, min.cells = 3, min.features = 200)
+  seurat_obj[["percent.mt"]] <- PercentageFeatureSet(seurat_obj, pattern = "^MT-")  # Calculate mitochondrial gene percentage
+  seurat_obj$group <- group_name  # Add group information to metadata
+  # Subset the object to retain cells with desired QC metrics
+  seurat_obj <- subset(seurat_obj, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 25)
+  return(seurat_obj)
+}
+
+# Function to merge multiple Seurat objects
+# @param seurat_objs List of Seurat objects to merge
+# @return A merged Seurat object
+merge_seurat <- function(seurat_objs) {
+  # Merge all Seurat objects into one
+  do.call(merge, c(list(x = seurat_objs[[1]]), seurat_objs[-1]))
+}
+
+# Function for normalization and scaling of Seurat object
+# @param scRNA A Seurat object
+# @return A normalized and scaled Seurat object
+normalize_seurat <- function(scRNA) {
+  scRNA <- NormalizeData(scRNA)  # Normalize data
+  scRNA <- FindVariableFeatures(scRNA)  # Identify highly variable features
+  scRNA <- ScaleData(scRNA)  # Scale the data
+  return(scRNA)
+}
+
+# Function to run PCA and Harmony integration
+# @param scRNA A Seurat object
+# @return A Seurat object with PCA and Harmony results
+run_pca_harmony <- function(scRNA) {
+  scRNA <- RunPCA(scRNA, features = VariableFeatures(scRNA))  # Run PCA
+  scRNA <- RunHarmony(scRNA, group.by.vars = "orig.ident")  # Run Harmony integration to remove batch effects
+  return(scRNA)
+}
+
+# Function to perform clustering and dimensionality reduction (UMAP, TSNE)
+# @param scRNA A Seurat object
+# @param dims Number of dimensions to use for clustering
+# @param resolution Resolution for clustering
+# @return A Seurat object with clustering and UMAP/TSNE results
+run_clustering <- function(scRNA, dims = 1:20, resolution = 0.5) {
+  scRNA <- FindNeighbors(scRNA, dims = dims, reduction = "harmony")  # Identify neighboring cells
+  scRNA <- FindClusters(scRNA, resolution = resolution)  # Cluster cells
+  scRNA <- RunUMAP(scRNA, dims = dims, reduction = "harmony")  # Run UMAP for dimensionality reduction
+  scRNA <- RunTSNE(scRNA, dims = dims, reduction = "harmony")  # Run TSNE for dimensionality reduction
+  return(scRNA)
+}
+
+# Function to annotate cell types using SingleR
+# @param scRNA A Seurat object
+# @param ref_data Reference dataset for SingleR
+# @return A Seurat object with annotated cell types
+annotate_cells <- function(scRNA, ref_data) {
+  # Perform cell type annotation using SingleR
+  pred.cluster <- SingleR(test = GetAssayData(scRNA, slot = "data"), ref = ref_data, clusters = Idents(scRNA))
+  scRNA$celltype <- pred.cluster$labels[match(Idents(scRNA), rownames(pred.cluster))]  # Map SingleR labels to Seurat clusters
+  return(scRNA)
+}
+
+# Function to generate violin plot and dimensionality reduction plots (UMAP, TSNE)
+# @param scRNA A Seurat object
+# @param file_prefix Prefix for saving output files
+generate_plots <- function(scRNA, file_prefix) {
+  # Generate quality control plots (nFeature_RNA, nCount_RNA, percent.mt)
+  pdf(paste0(file_prefix, "_qc.pdf"))
+  VlnPlot(scRNA, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"))
+  dev.off()
+  
+  # Generate PCA Elbow Plot and UMAP/TSNE plots
+  pdf(paste0(file_prefix, "_dr.pdf"))
+  ElbowPlot(scRNA)  # PCA elbow plot to determine the number of significant PCs
+  DimPlot(scRNA, reduction = "umap") + DimPlot(scRNA, reduction = "tsne")  # UMAP and TSNE plots
+  dev.off()
+}
+
+# Function to find and save differentially expressed genes for each cluster
+# @param scRNA A Seurat object
+# @param output_dir Directory to save output files
+find_save_diff_genes <- function(scRNA, output_dir) {
+  for (cluster in levels(scRNA@active.ident)) {
+    markers <- FindMarkers(scRNA, ident.1 = cluster, min.pct = 0.25, logfc.threshold = 0.25)  # Find markers for each cluster
+    write.table(markers, file = file.path(output_dir, paste0(cluster, '_markers.tsv')), sep = '\t', quote = FALSE)  # Save markers to file
+  }
+}
