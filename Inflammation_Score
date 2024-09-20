@@ -1,0 +1,102 @@
+# Load required libraries
+library(GSEABase)
+library(Seurat)
+library(ggplot2)
+library(dplyr)
+library(ggpubr)
+library(ggsci)
+
+# Load RDS and GMT files
+load_data <- function(rds_file, gmt_file) {
+  scRNA <- readRDS(rds_file)  # Load Seurat object from RDS
+  gmt <- getGmt(gmt_file)  # Load gene set from GMT file
+  return(list(scRNA = scRNA, gmt = gmt))
+}
+
+# Extract relevant inflammation genes from GMT
+extract_inflammation_genes <- function(gmt, scRNA) {
+  inflammation_genes <- toupper(geneIds(gmt[["HALLMARK_INFLAMMATORY_RESPONSE"]]))  # Convert gene names to uppercase
+  intersect(inflammation_genes, rownames(scRNA))  # Return intersection of genes present in the dataset
+}
+
+# Calculate module score for inflammation genes
+calculate_module_score <- function(scRNA, inflammation_genes) {
+  if (length(inflammation_genes) < 3) stop("Not enough inflammation genes in dataset.")  # Ensure enough genes
+  score_list <- list(inflammation_genes)
+  names(score_list) <- "Inflammation_Genes"
+  AddModuleScore(scRNA, features = score_list, ctrl = 200, name = "Inflammation_Score")  # Add module score to Seurat object
+}
+
+# Generate violin plots for inflammation scores by group and cell type
+plot_inflammation_score <- function(scRNA) {
+  meta_data <- scRNA@meta.data
+  
+  # Plot by orig.ident
+  p1 <- ggplot(meta_data, aes(x=orig.ident, y=Inflammation_Score1, fill=group)) + 
+    geom_violin(width=0.7) + 
+    geom_boxplot(width=0.2, color="white") +
+    scale_fill_nejm() +
+    theme_bw() +
+    ggtitle("Inflammation Score by orig.ident") +
+    stat_compare_means(aes(group=group), method = "t.test", label = "p.signif", size=4.5)
+  
+  # Plot by cell type
+  p2 <- ggplot(meta_data, aes(x=Celltype_total, y=Inflammation_Score1, fill=group)) + 
+    geom_violin(width=0.7) + 
+    geom_boxplot(width=0.2, color="white", position=position_dodge(width=0.7)) +
+    scale_fill_nejm() +
+    theme_bw() +
+    ggtitle("Inflammation Score by Cell Type") +
+    stat_compare_means(aes(group=group), method = "t.test", label = "p.signif", size=4.5) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  return(list(p1 = p1, p2 = p2))
+}
+
+# Calculate and save mean inflammation scores by group, cell type, and orig.ident
+save_mean_scores <- function(scRNA, output_prefix) {
+  meta_data <- scRNA@meta.data
+  
+  # Mean scores by cell type and group
+  mean_celltype <- meta_data %>%
+    group_by(Celltype_total, group) %>%
+    summarize(mean_Inflammation_Score = mean(Inflammation_Score1, na.rm = TRUE))
+  write.csv(mean_celltype, paste0(output_prefix, "celltype_Inflammation_Score_mean.csv"))
+  
+  # Mean scores by group
+  mean_group <- meta_data %>%
+    group_by(group) %>%
+    summarize(mean_Inflammation_Score = mean(Inflammation_Score1, na.rm = TRUE))
+  write.csv(mean_group, paste0(output_prefix, "group_Inflammation_Score_mean.csv"))
+  
+  # Mean scores by orig.ident
+  mean_orig <- meta_data %>%
+    group_by(orig.ident) %>%
+    summarize(mean_Inflammation_Score = mean(Inflammation_Score1, na.rm = TRUE))
+  write.csv(mean_orig, paste0(output_prefix, "orig_Inflammation_Score_mean.csv"))
+}
+
+# Main analysis workflow
+run_analysis <- function(rds_file, gmt_file, output_prefix) {
+  # Load data
+  data <- load_data(rds_file, gmt_file)
+  scRNA <- data$scRNA
+  gmt <- data$gmt
+  
+  # Extract genes and calculate score
+  inflammation_genes <- extract_inflammation_genes(gmt, scRNA)
+  scRNA <- calculate_module_score(scRNA, inflammation_genes)
+  
+  # Generate and print plots
+  plots <- plot_inflammation_score(scRNA)
+  print(plots$p1)
+  print(plots$p2)
+  
+  # Calculate and save mean scores
+  save_mean_scores(scRNA, output_prefix)
+}
+
+# Execute analysis
+run_analysis("/media/mengqing.yan/Elements/Human-NEW2406/117757-R.rds",
+             "HALLMARK_INFLAMMATORY_RESPONSE.v2023.2.Hs(1).gmt",
+             "inflammation_analysis_")
