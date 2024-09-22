@@ -1,0 +1,69 @@
+# Load required libraries
+load_required_libraries <- function() {
+  if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
+  remotes::install_github('saezlab/liana')
+  
+  library(Seurat)
+  library(tidyverse)
+  library(magrittr)
+  library(liana)
+  library(ggplot2)
+  library(dplyr)
+}
+
+# Main Pipeline Function
+run_pipeline <- function(input_file, output_file, liana_rds_file, liana_csv_file, plot_file, cell_types = c("Macrophages", "Epithelial cells")) {
+  # Load required libraries
+  load_required_libraries()
+  
+  # Step 1: Data Preprocessing
+  PRO <- readRDS(input_file)
+  testdata <- subset(PRO, celltype_TOTALMY %in% cell_types)
+  
+  # Add a new metadata column combining 'orig.ident' and 'celltype_TOTALMY'
+  testdata@meta.data$new_column <- paste(testdata@meta.data$orig.ident, testdata@meta.data$celltype_TOTALMY, sep = "_")
+  
+  # Save the processed data
+  saveRDS(testdata, file = output_file)
+  
+  # Step 2: Run LIANA Analysis
+  liana_res <- liana_wrap(testdata, method = c('sca', 'cellphonedb', 'natmi'), resource = "MouseConsensus", idents_col = "new_column")
+  
+  # Aggregate results
+  liana_res <- liana_res %>% liana_aggregate()
+  
+  # Save results
+  saveRDS(liana_res, file = liana_rds_file)
+  write.csv(liana_res, file = liana_csv_file)
+  
+  # Step 3: Plot Interaction Results (filtering specific ligands)
+  filtered_res <- subset(liana_res, ligand.complex %in% c("S100a9", "Lcn2", "Fos"))
+  
+  # Generate plot
+  p <- filtered_res %>% 
+    liana_dotplot(source_groups = NULL, 
+                  target_groups = NULL, 
+                  ntop = NULL, 
+                  specificity = "aggregate_rank", 
+                  magnitude = "mean_rank", 
+                  y.label = "Interactions (Ligand -> Receptor)", 
+                  size.label = "Interaction\nSpecificity", 
+                  colour.label = "Expression\nMagnitude", 
+                  show_complex = TRUE, 
+                  size_range = c(2, 10)) + 
+    scale_color_gradient(low = "yellow", high = "green") + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  # Save plot
+  ggsave(plot_file, plot = p)
+  
+  return(list(results = liana_res, plot = p))
+}
+
+# Example usage
+run_pipeline(input_file = "/Volumes/Elements/mice-lung-pbmc/Macro_Neu_Epi.rds",
+             output_file = "B1_PBMC_N-Lung_M.rds",
+             liana_rds_file = "B1-MACRO-DEG-Lung-liana.RDS",
+             liana_csv_file = "B1-MACRO-DEG-Lung-liana.csv",
+             plot_file = "B1-MACRO-DEG-Lung-liana.png")
