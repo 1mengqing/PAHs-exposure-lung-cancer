@@ -1,44 +1,83 @@
-#cell annotation------------------------------------------------------------
-#singleR
-#load package
+# Cell annotation using SingleR
+
+# Load required libraries
 library(Seurat)
 library(tidyverse)
 library(SingleR)
 library(celldex)
-#database
-#Mouse.se=MouseRNAseqData()##mouse
-hpca.se=HumanPrimaryCellAtlasData() ##human
-Blue.se=BlueprintEncodeData()##human
-Immune.se=DatabaseImmuneCellExpressionData()##human
-Nover.se=NovershternHematopoieticData()##human
-MonacoIm.se=MonacoImmuneData()##human
-#ImmGen.se=ImmGenData() #(mouse)
 
-saveRDS(hpca.se,'hpca.se.rds')
-saveRDS(Blue.se,'Blue.se.rds')
-saveRDS(Immune.se,'Immune.se.rds')
-saveRDS(Nover.se,'Nover.se.rds')
-saveRDS(MonacoIm.se,'MonacoIm.se.rds')
+# Load reference datasets for annotation
+load_reference_data <- function() {
+  hpca.se <- HumanPrimaryCellAtlasData()  # Human primary cell atlas
+  Blue.se <- BlueprintEncodeData()        # Blueprint Encode dataset
+  MonacoIm.se <- MonacoImmuneData()       # Monaco immune data
+  saveRDS(hpca.se, 'hpca.se.rds')
+  saveRDS(Blue.se, 'Blue.se.rds')
+  saveRDS(MonacoIm.se, 'MonacoIm.se.rds')
+  return(list(hpca.se = hpca.se, Blue.se = Blue.se, MonacoIm.se = MonacoIm.se))
+}
 
-#load data
-scRNA<- readRDS("scRNA_harmony.rds")
-data <- GetAssayData(scRNA, slot="data") ##Get normalized matrix
-#annotate by cluster :resolution=0.5:RNA_snn_res.0.5
-Idents(scRNA) <- 'RNA_snn_res.0.5'
-pred.cluster <- SingleR(test = data, ref = list(Bu=Blue.se, hp=hpca.se, Mo=MonacoIm.se), clusters=Idents(scRNA), labels = list(Blue.se$label.main,hpca.se$label.main,MonacoIm.se$label.main)) #按照细胞群进行注释
-#pred.cluster <- SingleR(test = data, ref = list(HPCA=hpca.se), clusters=Idents(scRNA),labels = list(hpca.se$label.main)) 
-celltype <-data.frame(ClusterID=rownames(pred.cluster),celltype_SR=pred.cluster$labels,stringsAsFactors = F)
-head(celltype)
-celltype
-scRNA[['celltype_R']]<- celltype$celltype_SR[match(Idents(scRNA), celltype$ClusterID)]
-head(scRNA@meta.data)
-#plot
+# Annotate cell clusters with SingleR
+annotate_cells <- function(scRNA, ref_data) {
+  # Get normalized data matrix from Seurat object
+  data <- GetAssayData(scRNA, slot = "data")
+  
+  # Annotate clusters using multiple reference datasets
+  Idents(scRNA) <- 'RNA_snn_res.0.5'
+  pred.cluster <- SingleR(test = data, 
+                          ref = list(Blue = ref_data$Blue.se, 
+                                     HPCA = ref_data$hpca.se, 
+                                     Monaco = ref_data$MonacoIm.se), 
+                          clusters = Idents(scRNA), 
+                          labels = list(ref_data$Blue.se$label.main, 
+                                        ref_data$hpca.se$label.main, 
+                                        ref_data$MonacoIm.se$label.main))
+  
+  # Create a data frame with cluster annotations
+  celltype <- data.frame(ClusterID = rownames(pred.cluster),
+                         celltype_SR = pred.cluster$labels, 
+                         stringsAsFactors = FALSE)
+  
+  # Add cell type annotations to Seurat object
+  scRNA[['celltype_R']] <- celltype$celltype_SR[match(Idents(scRNA), celltype$ClusterID)]
+  return(scRNA)
+}
 
-pdf(file="7.1.umap.pdf",width=18,height = 12)
-DimPlot(scRNA,reduction = "umap",raster=FALSE,label=TRUE) 
-dev.off()
-pdf(file="7.2.tsne.pdf",width=12,height = 6)
-DimPlot(scRNA,reduction = "tsne",raster=FALSE,label=TRUE) 
-dev.off()
+# Plot UMAP and t-SNE for annotated clusters
+plot_dimensional_reduction <- function(scRNA, output_prefix = "scRNA_annotation") {
+  # UMAP plot
+  pdf(file = paste0(output_prefix, "_umap.pdf"), width = 18, height = 12)
+  DimPlot(scRNA, reduction = "umap", raster = FALSE, label = TRUE)
+  dev.off()
+  
+  # t-SNE plot
+  pdf(file = paste0(output_prefix, "_tsne.pdf"), width = 12, height = 6)
+  DimPlot(scRNA, reduction = "tsne", raster = FALSE, label = TRUE)
+  dev.off()
+}
 
-saveRDS(scRNA,"singleR.rds")
+# Save Seurat object
+save_scRNA <- function(scRNA, output_file = "scRNA_annotated.rds") {
+  saveRDS(scRNA, file = output_file)
+}
+
+# Main function to run the annotation workflow
+run_annotation_workflow <- function(scRNA_file, output_prefix = "scRNA_annotation") {
+  # Load Seurat object
+  scRNA <- readRDS(scRNA_file)
+  
+  # Load reference datasets
+  ref_data <- load_reference_data()
+  
+  # Annotate cells using SingleR
+  scRNA <- annotate_cells(scRNA, ref_data)
+  
+  # Plot UMAP and t-SNE with annotations
+  plot_dimensional_reduction(scRNA, output_prefix)
+  
+  # Save annotated Seurat object
+  save_scRNA(scRNA, paste0(output_prefix, ".rds"))
+}
+
+# Run the annotation workflow
+run_annotation_workflow("scRNA_harmony.rds", output_prefix = "singleR_annotation")
