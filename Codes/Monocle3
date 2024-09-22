@@ -1,0 +1,147 @@
+# Load necessary packages for monocle3
+install_monocle3 <- function() {
+  if (!requireNamespace("BiocManager", quietly = TRUE)) 
+    install.packages("BiocManager")
+  
+  BiocManager::install(version = "3.14")
+  BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats',
+                         'limma', 'lme4', 'S4Vectors', 'SingleCellExperiment',
+                         'SummarizedExperiment', 'batchelor', 'Matrix.utils',
+                         'HDF5Array', 'terra', 'ggrastr'))
+  
+  install.packages("devtools")
+  devtools::install_github('cole-trapnell-lab/monocle3')
+  
+  # Load required libraries
+  library(monocle3)
+  library(Seurat)
+  library(ggplot2)
+  library(dplyr)
+}
+
+# Step 1: Create CDS Object from Seurat Object
+create_cds_object <- function(seurat_obj, group = "Bap") {
+  # Subset data if necessary
+  mouse_data <- subset(seurat_obj, group == group)
+  
+  # Convert expression data and metadata
+  expression_matrix <- as(as.matrix(mouse_data@assays$RNA@counts), 'sparseMatrix')
+  cell_metadata <- mouse_data@meta.data
+  gene_annotation <- data.frame(gene_short_name = rownames(expression_matrix))
+  rownames(gene_annotation) <- rownames(expression_matrix)
+  
+  # Create CDS object
+  cds <- new_cell_data_set(expression_matrix, 
+                           cell_metadata = cell_metadata, 
+                           gene_metadata = gene_annotation)
+  return(cds)
+}
+
+# Step 2: Dimensionality Reduction and Clustering
+preprocess_and_cluster <- function(cds, num_dim = 100) {
+  cds <- preprocess_cds(cds, num_dim = num_dim)
+  plot_pc_variance_explained(cds)  # Plot variance explained by PCs
+  
+  # UMAP dimensionality reduction
+  cds <- reduce_dimension(cds, reduction_method = 'UMAP', preprocess_method = 'PCA')
+  # Cluster cells
+  cds <- cluster_cells(cds)
+  
+  # Return the updated CDS object
+  return(cds)
+}
+
+# Step 3: Learn Graph and Infer Trajectory
+infer_trajectory <- function(cds, minimal_branch_len = 20, euclidean_distance_ratio = 10) {
+  cds <- learn_graph(cds, 
+                     learn_graph_control = list(minimal_branch_len = minimal_branch_len,
+                                                euclidean_distance_ratio = euclidean_distance_ratio))
+  return(cds)
+}
+
+# Step 4: Order Cells in Pseudotime
+order_cells_by_pseudotime <- function(cds) {
+  # Get the earliest principal node (root) for pseudotime ordering
+  get_earliest_principal_node <- function(cds) {
+    cell_ids <- dim(cds)[2]
+    closest_vertex <- cds@principal_graph_aux[["UMAP"]]$pr_graph_cell_proj_closest_vertex
+    closest_vertex <- as.matrix(closest_vertex[colnames(cds), ])
+    root_pr_nodes <- igraph::V(principal_graph(cds)[["UMAP"]])$name[as.numeric(names(which.max(table(closest_vertex[cell_ids, ]))))]
+    return(root_pr_nodes)
+  }
+  
+  # Order cells
+  cds <- order_cells(cds, root_pr_nodes = get_earliest_principal_node(cds))
+  return(cds)
+}
+
+# Step 5: Plot Trajectory with Pseudotime
+plot_trajectory <- function(cds, pseudotime_col = "pseudotime") {
+  plot_cells(cds, 
+             label_cell_groups = F, 
+             color_cells_by = pseudotime_col, 
+             label_leaves = F, 
+             label_branch_points = F, 
+             graph_label_size = 4, 
+             cell_size = 0.5, 
+             trajectory_graph_segment_size = 2)
+}
+
+# Step 6: Add Pseudotime to Seurat Object
+add_pseudotime_to_seurat <- function(seurat_obj, cds) {
+  pd <- pseudotime(cds, reduction_method = 'UMAP')
+  seurat_obj <- AddMetaData(seurat_obj, metadata = pd, col.name = 'pseudotime')
+  return(seurat_obj)
+}
+
+# Step 7: Identify Genes Related to Pseudotime
+identify_pseudotime_genes <- function(cds, output_file = "pseudotime_genes.csv") {
+  # Perform graph test to identify pseudotime related genes
+  pseudotime_genes <- graph_test(cds, neighbor_graph = "principal_graph", cores = 4)
+  
+  # Save the result to a CSV file
+  write.csv(pseudotime_genes, file = output_file)
+  
+  return(pseudotime_genes)
+}
+
+# Step 8: Plot Genes Along Pseudotime
+plot_genes_along_pseudotime <- function(cds, gene_list) {
+  plot_genes_in_pseudotime(cds[gene_list, ], color_cells_by = "pseudotime", min_expr = 0.5, ncol = 2)
+}
+
+# Main Function to Run Monocle3 Workflow
+run_monocle3_workflow <- function(seurat_obj, output_file = 'monocle3_results.RData', genes_to_plot = NULL) {
+  # Step 1: Create CDS Object
+  cds <- create_cds_object(seurat_obj)
+  
+  # Step 2: Preprocess and Cluster
+  cds <- preprocess_and_cluster(cds)
+  
+  # Step 3: Infer Trajectory
+  cds <- infer_trajectory(cds)
+  
+  # Step 4: Order Cells by Pseudotime
+  cds <- order_cells_by_pseudotime(cds)
+  
+  # Step 5: Plot Trajectory
+  plot_trajectory(cds)
+  
+  # Step 6: Identify Pseudotime Related Genes
+  pseudotime_genes <- identify_pseudotime_genes(cds)
+  
+  # Step 7: Plot Selected Genes Along Pseudotime
+  if (!is.null(genes_to_plot)) {
+    plot_genes_along_pseudotime(cds, genes_to_plot)
+  }
+  
+  # Save the CDS object and results
+  save(cds, file = output_file)
+  
+  return(cds)
+}
+
+# Example Usage
+install_monocle3()  # Install necessary packages
+seurat_data <- readRDS("/Volumes/Elements/mice-lung-pbmc/myeloid-cells/Macrophages/macro-R.rds")
+cds <- run_monocle3_workflow(seurat_data, genes_to_plot = c("GADD45A", "PTEN", "ATM", "MCM6"))
